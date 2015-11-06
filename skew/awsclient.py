@@ -15,6 +15,7 @@
 import logging
 import json
 import os
+import threading
 
 import datetime
 import jmespath
@@ -30,7 +31,9 @@ LOG = logging.getLogger(__name__)
 # Token is optional and only required for federated accounts.
 # In order for this to work, you must provide a
 # value to skew.config._config, i.e. {'accounts': {'123456789012': None}}
-aws_creds = {}
+LOCAL = threading.local()
+LOCAL.aws_creds = {}
+LOCAL._client_cache = {}
 
 
 def json_encoder(obj):
@@ -49,7 +52,7 @@ class AWSClient(object):
         self._region_name = region_name
         self._account_id = account_id
         self._has_credentials = False
-        if not aws_creds.get(self._account_id):
+        if LOCAL.aws_creds.get(self._account_id) is None:
             # If no creds, need profile name to retrieve creds from ~/.aws/credentials
             self._profile = self._config['accounts'][account_id]['profile']
         self._client = self._create_client()
@@ -109,8 +112,8 @@ class AWSClient(object):
 
     def _create_client(self):
         session = botocore.session.get_session()
-        if aws_creds.get(self._account_id):
-            session.set_credentials(**aws_creds[self._account_id])
+        if LOCAL.aws_creds.get(self._account_id):
+            session.set_credentials(**LOCAL.aws_creds[self._account_id])
         else:
             session.set_config_variable('profile', self.profile)
         return session.create_client(
@@ -159,13 +162,9 @@ class AWSClient(object):
         return data
 
 
-_client_cache = {}
-
-
 def get_awsclient(service_name, region_name, account_id):
-    global _client_cache
     client_key = '{}:{}:{}'.format(service_name, region_name, account_id)
-    if client_key not in _client_cache:
+    if client_key not in LOCAL._client_cache:
         _client_cache[client_key] = AWSClient(service_name,
                                               region_name,
                                               account_id)
