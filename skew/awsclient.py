@@ -26,7 +26,7 @@ LOG = logging.getLogger(__name__)
 
 # Offer an override for setting credentials instead of falling back to the
 # ~/.aws/credentials file. Dict to be formatted as:
-# {'access_key': key, 'secret_key': secret, 'token': token}
+# {'123456789012': {'access_key': key, 'secret_key': secret, 'token': token}}
 # Token is optional and only required for federated accounts.
 # In order for this to work, you must provide a
 # value to skew.config._config, i.e. {'accounts': {'123456789012': None}}
@@ -49,7 +49,7 @@ class AWSClient(object):
         self._region_name = region_name
         self._account_id = account_id
         self._has_credentials = False
-        if not aws_creds:
+        if not aws_creds.get(self._account_id):
             # If no creds, need profile name to retrieve creds from ~/.aws/credentials
             self._profile = self._config['accounts'][account_id]['profile']
         self._client = self._create_client()
@@ -109,8 +109,8 @@ class AWSClient(object):
 
     def _create_client(self):
         session = botocore.session.get_session()
-        if aws_creds:
-            session.set_credentials(**aws_creds)
+        if aws_creds.get(self._account_id):
+            session.set_credentials(**aws_creds[self._account_id])
         else:
             session.set_config_variable('profile', self.profile)
         return session.create_client(
